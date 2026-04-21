@@ -31,7 +31,7 @@ def login_view(request):
             return redirect('main:index')    
     else:
         form = CustomUserLoginForm()
-        return render(request, 'users/login.html', 'form' : form)
+        return render(request, 'users/login.html', {'form' : form})
     
 @login_required
 def profile_view(request):
@@ -53,20 +53,37 @@ def profile_view(request):
 
 
 @login_required
-def account_detail(request):
+def account_details(request):
     user = get_user_model().objects.get(id = request.user.id)
     return TemplateResponse(request, 'users/partials/account_details.html', context = {'user':user})
 
 @login_required
-def edit_account_detail(request):
+def edit_account_details(request):
     form = CustomUserUpdateForm(instance = request.user)
     return TemplateResponse(request, 'users/partials/edit_account_detail.html', context = {'users':request.user, 'form':form})
 
 @login_required
-def update_account_detail(request):
+def update_account_details(request):
     if request.method == 'POST':
         form = CustomUserUpdateForm(request.POST, instance=request.user)
         if form.is_valid():
             user = form.save(commit=False)
             user.clean()
-            
+            user.save()
+            updated_user = CustomUser.objects.get(id = user.id)
+            request.user = updated_user 
+            if request.headers.get('HX-Request'):
+                return TemplateResponse(request, 'users/partials/account_details.html', context={'user':updated_user})
+            return TemplateResponse(request, 'users/partials/account_details.html', context = {'users':updated_user})
+        else:
+            return TemplateResponse(request, 'users/partials/account_details.html', {'users': request.user, 'form':form})
+        
+    if request.header.get('HX-Request'):
+        return HttpResponse(headers={"HX-Redirect":reverse('users:profile')})
+    return redirect("users:profile")
+
+def logout_view(request):
+    logout(request)
+    if request.headers.get('HX-Request'):
+        return HttpResponse(headers={"HX-Redirect": reverse('main:index')})
+    return redirect('main:index')
