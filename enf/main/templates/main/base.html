@@ -148,8 +148,8 @@
             
             <div class="mt-8 space-y-4">
                 <a href="#" class="block text-sm font-medium text-gray-900 hover:text-gray-700 py-2">SEARCH</a>
-                <a href="#" 
-                hx-get="#" 
+                <a href="{% url 'users:profile' %}" 
+                hx-get="{% url 'users:profile' %}" 
                 hx-target="#main-content" 
                 hx-push-url="true"
                 class="text-sm font-medium text-gray-900 uppercase hover:text-gray-600">
@@ -208,8 +208,8 @@
                             SEARCH
                         </button>
                     </div>
-                    <a href="#" 
-                    hx-get="#" 
+                    <a href="{% url 'users:profile' %}" 
+                    hx-get="{% url 'users:profile' %}" 
                     hx-target="#main-content" 
                     hx-push-url="true"
                     class="text-sm font-medium text-gray-900 uppercase hover:text-gray-600">
