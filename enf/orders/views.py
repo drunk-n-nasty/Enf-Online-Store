@@ -13,7 +13,9 @@ from main.models import ProductSize
 from django.shortcuts import get_object_or_404
 from decimal import Decimal
 from payment.views import create_stripe_checkout_session
+import logging 
 
+logger = logging.getLogger(__name__)
 
 @method_decorator(login_required(login_url='users:login'), name = 'dispatch')
 class CheckoutView(CartMixin, View):
@@ -22,13 +24,16 @@ class CheckoutView(CartMixin, View):
     """
     def get(self, request):
         cart = self.get_cart(request)
-        
+        logger.debug(f"Checkout view: session_key={request.session.session_key}, cart_id={cart.id}, total_items={cart.total_items}, subtotal={cart.subtotal}")
         if cart.total_items == 0:
+            logger.warning('Cart is empty, redirecting to cart page.')
             if request.headers.get('HX-Request'):
                 return TemplateResponse(request, 'orders/empty_cart.html', {'message' : 'Your cart is empty'})
             return redirect('cart:cart_modal')
         
         total_price = cart.subtotal
+        logger.debug(f"Total price: {total_price}")
+
         form = OrderForm(user=request.user)
         context = {
             'form' : form, 
@@ -46,13 +51,16 @@ class CheckoutView(CartMixin, View):
     def post(self, request):
         cart = self.get_cart(request) # Получаем коризну из миксина
         payment_provider = request.POST.get('payment_provider') #Получаем данные payment_provider из тела POST-запроса (кнопка из формы)
+        logger.debug(f"Checkout POST: session_key={request.session.session_key}, cart_id={cart.id}, total_items={cart.total_items}, payment_provider={payment_provider}")
 
         if cart.total_items == 0:  # Если корзина пустая то соответствующий message 
+            logger.warning("Cart is empty, redirecting to cart page")
             if request.headers.get('HX-Request'):
                 return TemplateResponse(request, 'orders/empty_cart.html', {'message' : 'Your cart is empty'})
             return redirect('cart:cart_modal') # и перенаправление на модалку корзины
 
         if not payment_provider or payment_provider not in ['stripe', 'heleket']: # Если payment_provider неподходящий/неправильный то генерируем сообщение-ответ
+            logger.error(f"Invalid or missing payment provider: {payment_provider}")
             context = {
                 'form' : OrderForm(user = request.user),
                 'cart' : cart, 
@@ -90,6 +98,7 @@ class CheckoutView(CartMixin, View):
                 )
             
             for item in cart.items.select_related('product', 'product_size__size'): # Для каждого товара создаем OrderItem - привязываем каждый товар корзины к нашему заказу
+                logger.debug(f"Processing cart item: product={item.product.name}, size={item.product_size.size.name}, quantity={item.quantity}")
                 OrderItem.objects.create(
                     order = order, 
                     product = item.product, 
@@ -99,15 +108,19 @@ class CheckoutView(CartMixin, View):
                 ) 
 
             try: 
+                logger.info(f"Creating payment session for provider: {payment_provider}")
                 if payment_provider == 'stripe': # Если stripe то генерируем платежную сессию Stripe через метод create_stripe_checkout_session с передачей order
+                    logger.debug("Creating Stripe checkout session")
                     checkout_session = create_stripe_checkout_session(order, request) # Создаем платежную сессию Stripe, метод вернет Объект Stripe у которого есть url - ссылка для оплаты
                     if request.headers.get('HX-Request'):  
                         print(checkout_session.url)
                         response = HttpResponse(status=200) 
                         response['HX-Redirect'] = checkout_session.url # После того как сессия создана и оплата зарезервирована пользователь перенаправляется на страницу оплаты
+                        logger.info(f"HX-Redirect to Stripe: {checkout_session.url}")
                         return response 
                     return redirect(checkout_session.url)
             except Exception as e: # Если какие-то ошибки то выводим соответствующий message 
+                logger.error(f"Error creating payment: {str(e)}", exc_info=True)
                 order.delete() # и удаляем order 
                 context = {
                     'form':form, 
@@ -120,6 +133,7 @@ class CheckoutView(CartMixin, View):
                     return TemplateResponse(request, 'orders/checkout_content.html', context)
                 return render(request, 'orders/checkout.html', context)
         else: #Если форма не прошла валидацию то выводим соответствующее сообщение  
+            logger.warning(f"Form validation error: {form.errors}")
             context = {
                 'form' : form, 
                 'cart' : cart, 
