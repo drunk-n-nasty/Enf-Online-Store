@@ -12,6 +12,13 @@ import json
 
 
 class CartMixin:
+    """
+    Миксин нужен для быстрого получения корзины из любого класса представления.
+    Миксин проверяет есть ли уже корзина в request.cart (из middleware) если есть то вернет 
+    Проверка есть ли у пользователя session_key если нет то создает 
+    Поиск или создание корзины на основе session_key
+    Сохраняет cart.id в сессию для быстрого поиска в бд
+    """
     def get_cart(self, request):
         if hasattr(request, 'cart'):
             return request.cart
@@ -29,6 +36,9 @@ class CartMixin:
     
 
 class CartModalView(CartMixin, View):
+    """
+    Метод получаем корзину и передает в контест шаблона данные о товарах
+    """
     def get(self, request):
         cart = self.get_cart(request)
         context = {
@@ -42,7 +52,15 @@ class CartModalView(CartMixin, View):
 
 
 class AddToCartView(CartMixin, View):
-    @transaction.atomic
+    """
+    Метод добавляет товар в корзину в рамках одной транзакции
+    Получаем коризну и товар
+    Заполняем форму добавления товара
+    Выбираем размер, если пользователь ввел размер то достаем его если нет то берем первый из бд
+    Проверяем чтобы выбранное кол-во было меньше product_size.stock если нет то выдаем ошибку 
+    if existing_item: - Проверка на то есть ли товар уже в коризне если да то увлеличиваем его qunatity но чтобы было меньше стока
+    """
+    @transaction.atomic 
     def post(self, request, slug):
         cart = self.get_cart(request)
         product = get_object_or_404(Product, slug=slug)
@@ -89,8 +107,6 @@ class AddToCartView(CartMixin, View):
             
         cart_item = cart.add_product(product, product_size, quantity)
 
-        request.session['cart_id'] = cart.id
-        request.session.modified = True
 
         if request.headers.get('HX-Request'):
             return redirect('cart:cart_modal')
@@ -104,6 +120,15 @@ class AddToCartView(CartMixin, View):
         
 
 class UpdateCartItemView(CartMixin, View):
+    """
+    Метод обновления товаров в корзине (не связан с методом модели). 
+    cart_item - Достаем объект CartItem (коризна + товар)
+    Обновляем количество если kwargs пуст то +1
+    Если количество меньше 0 - ошибка
+    Если 0 то удаляем 
+    Если больше стока - ошибка
+
+    """
     @transaction.atomic
     def post(self, request, item_id):
         cart = self.get_cart(request)
@@ -125,9 +150,6 @@ class UpdateCartItemView(CartMixin, View):
             cart_item.quantity = quantity
             cart_item.save()
 
-        request.session['cart_id'] = cart.id
-        request.session.modified = True
-
         context = {
             'cart': cart,
             'cart_items': cart.items.select_related(
@@ -139,15 +161,18 @@ class UpdateCartItemView(CartMixin, View):
     
 
 class RemoveCartItemView(CartMixin, View):
+    """
+    Удаление товара из коризны то есть удаление CartItem Объекта
+    Получаем корзину, есть item_id - id объекта конкретной корзины + конкретного товара.
+    Через cart related_name получаем этот объект и удаляем его
+    Передаем в контекст остатки товаров.
+    """
     def post(self, request, item_id):
         cart = self.get_cart(request)
 
         try:
             cart_item = cart.items.get(id=item_id)
             cart_item.delete()
-
-            request.session['cart_id'] = cart.id
-            request.session.modified = True
 
             context = {
                 'cart': cart,
@@ -162,6 +187,9 @@ class RemoveCartItemView(CartMixin, View):
         
     
 class CartCountView(CartMixin, View):
+    """
+    Получение общего кол-ва товаров корзины и общая сумма 
+    """
     def get(self, request):
         cart = self.get_cart(request)
         return JsonResponse({
@@ -171,12 +199,12 @@ class CartCountView(CartMixin, View):
     
 
 class ClearCartView(CartMixin, View):
+    """
+    Класс связанный с методом модели clear. Удаляет все товары корзины.
+    """
     def post(self, request):
         cart = self.get_cart(request)
         cart.clear()
-
-        request.session['cart_id'] = cart.id
-        request.session.modified = True
 
         if request.headers.get('HX-Request'):
             return TemplateResponse(request, 'cart/cart_empty.html', {
@@ -189,6 +217,9 @@ class ClearCartView(CartMixin, View):
 
 
 class CartSummaryView(CartMixin, View):
+    """
+    Информация по всем продукатм коризны.
+    """
     def get(self, request):
         cart = self.get_cart(request)
         context = {

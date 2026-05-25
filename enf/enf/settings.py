@@ -47,6 +47,8 @@ INSTALLED_APPS = [
     'main.apps.MainConfig',
     'cart.apps.CartConfig',
     'users.apps.UsersConfig',
+    'orders.apps.OrdersConfig',
+    'payment'
 ]
 
 MIDDLEWARE = [
@@ -147,3 +149,6 @@ AUTH_USER_MODEL = 'users.CustomUser'
 LOGIN_URL = 'users:login'
 LOGIN_URL_REDIRECT = 'main:index'
 LOGOUT_URL_REDIRECT = 'main:index'
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
+STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
+

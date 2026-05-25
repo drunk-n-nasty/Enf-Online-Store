@@ -8,6 +8,7 @@ class AddToCartForm(forms.Form):
     
 
     def __init__(self, *args, product=None, **kwargs):
+        # Когда пользователь выбирает товар то товар product через view попадает сразу в init формы с существующими размерами.
         super().__init__(*args, **kwargs )
         self.product = product
         
